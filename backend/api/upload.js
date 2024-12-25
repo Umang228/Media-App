@@ -1,39 +1,49 @@
-const express = require('express');
 const multer = require('multer');
 const cloudinary = require('../config/cloudinary');
 const Media = require('../models/Media');
 
-const router = express.Router();
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ storage: multer.memoryStorage() });
 
-router.post('/', upload.fields([{ name: 'thumbnail' }, { name: 'video' }]), async (req, res) => {
-  try {
-    const { title, description } = req.body;
+module.exports = async (req, res) => {
+  if (req.method === 'POST') {
+    try {
+      const { title, description } = req.body;
 
-    const thumbnail = await cloudinary.uploader.upload(req.files.thumbnail[0].path, { resource_type: 'image' });
-    const video = await cloudinary.uploader.upload(req.files.video[0].path, { resource_type: 'video' });
+      const uploadToCloudinary = (file, resourceType) =>
+        new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            { resource_type: resourceType },
+            (error, result) => {
+              if (error) return reject(error);
+              resolve(result);
+            }
+          );
+          file.stream.pipe(uploadStream);
+        });
 
-    const media = new Media({
-      title,
-      description,
-      thumbnailUrl: thumbnail.secure_url,
-      videoUrl: video.secure_url,
-    });
+      const thumbnailResult = await uploadToCloudinary(req.files.thumbnail[0], 'image');
+      const videoResult = await uploadToCloudinary(req.files.video[0], 'video');
 
-    await media.save();
-    res.json({ success: true, media });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+      const media = new Media({
+        title,
+        description,
+        thumbnailUrl: thumbnailResult.secure_url,
+        videoUrl: videoResult.secure_url,
+      });
+
+      await media.save();
+      res.status(200).json({ success: true, media });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  } else if (req.method === 'GET') {
+    try {
+      const media = await Media.find();
+      res.status(200).json({ success: true, media });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  } else {
+    res.status(404).json({ success: false, message: 'Not Found' });
   }
-});
-
-router.get('/', async (req, res) => {
-  try {
-    const media = await Media.find();
-    res.json({ success: true, media });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-module.exports = router;
+};
