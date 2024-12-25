@@ -1,21 +1,34 @@
 const multer = require('multer');
 const cloudinary = require('../config/cloudinary');
 const Media = require('../models/Media');
-const upload = multer({ dest: 'uploads/' });
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 module.exports = async (req, res) => {
   if (req.method === 'POST') {
     try {
       const { title, description } = req.body;
-      
-      const thumbnail = await cloudinary.uploader.upload(req.files.thumbnail[0].path, { resource_type: 'image' });
-      const video = await cloudinary.uploader.upload(req.files.video[0].path, { resource_type: 'video' });
+
+      const uploadToCloudinary = (file, resourceType) =>
+        new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            { resource_type: resourceType },
+            (error, result) => {
+              if (error) return reject(error);
+              resolve(result);
+            }
+          );
+          file.stream.pipe(uploadStream);
+        });
+
+      const thumbnailResult = await uploadToCloudinary(req.files.thumbnail[0], 'image');
+      const videoResult = await uploadToCloudinary(req.files.video[0], 'video');
 
       const media = new Media({
         title,
         description,
-        thumbnailUrl: thumbnail.secure_url,
-        videoUrl: video.secure_url,
+        thumbnailUrl: thumbnailResult.secure_url,
+        videoUrl: videoResult.secure_url,
       });
 
       await media.save();
