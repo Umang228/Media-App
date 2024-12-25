@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const uploadRoute = require('./routes/upload');
 require('dotenv').config();
 
 const app = express();
@@ -13,5 +14,5 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
 
 app.use(cors());
 app.use(bodyParser.json());
-
+app.use('/api/upload', uploadRoute);
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
